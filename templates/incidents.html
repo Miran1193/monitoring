@@ -1,0 +1,106 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Active Incidents</title>
+        <link rel="stylesheet" href="{% static 'style.css' %}">
+    </head>
+    <body>
+        <h1>Active Incidents</h1>
+
+        <label for="filter-type">Filter by type:</label>
+        <select id="filter-type">
+            <option value="">All</option>
+            <option value="CPU">CPU</option>
+            <option value="MEMORY">MEMORY</option>
+            <option value="DISK">DISK</option>
+        </select>
+        <button id="refresh-btn">Refresh</button>
+
+        <table id="incidents-table">
+            <thead>
+                <tr>
+                    <th>Machine</th>
+                    <th>Type</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div id="pagination"></div>
+
+        <script>
+            const API_URL = '/metric/api/incidents/';
+            const filterSelect = document.getElementById('filter-type');
+            const refreshBtn = document.getElementById('refresh-btn');
+            const tableBody = document.querySelector('#incidents-table tbody');
+            const paginationDiv = document.getElementById('pagination');
+
+            let incidentsData = [];
+            let currentPage = 1;
+            const perPage = 10;
+            let previousIds = new Set();
+
+            function renderTable() {
+                tableBody.innerHTML = '';
+                const filter = filterSelect.value;
+                const filtered = incidentsData.filter(inc => !filter || inc.type === filter);
+                const totalPages = Math.ceil(filtered.length / perPage);
+                const start = (currentPage - 1) * perPage;
+                const pageData = filtered.slice(start, start + perPage);
+
+                pageData.forEach(inc => {
+                    const row = document.createElement('tr');
+                    if (!previousIds.has(inc.id)) {
+                        row.classList.add('new-incident');
+                    }
+                    row.classList.add(inc.type.toLowerCase());
+                    row.innerHTML = `
+                        <td>${inc.machine}</td>
+                        <td>${inc.type}</td>
+                        <td>${inc.created}</td>
+                    `;
+                    tableBody.appendChild(row);
+                    previousIds.add(inc.id);
+                });
+
+                paginationDiv.innerHTML = '';
+                for (let i = 1; i <= totalPages; i++) {
+                    const btn = document.createElement('span');
+                    btn.textContent = i;
+                    btn.className = 'page-btn' + (i === currentPage ? ' active' : '');
+                    btn.addEventListener('click', () => {
+                        currentPage = i;
+                        renderTable();
+                    });
+                    paginationDiv.appendChild(btn);
+                }
+            }
+
+            async function fetchIncidents() {
+                try {
+                    const response = await fetch(API_URL, {
+                        headers: { 'X-API-KEY': 'supersecretkey' }
+                    });
+                    if (!response.ok) throw new Error('Unauthorized or network error');
+                    const data = await response.json();
+                    incidentsData = data;
+                    currentPage = 1;
+                    renderTable();
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+
+            fetchIncidents();
+            setInterval(fetchIncidents, 10000);
+            refreshBtn.addEventListener('click', fetchIncidents);
+            filterSelect.addEventListener('change', () => {
+                currentPage = 1;
+                renderTable();
+            });
+        </script>
+    </body>
+</html>
